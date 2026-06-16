@@ -85,23 +85,34 @@ export function MatchScorecard(props: ScorecardProps) {
             Enter gross scores — winner computed automatically
           </div>
           <ul className="divide-y">
-            {props.holes.map((hole, i) => (
-              <HoleRow
-                key={hole.holeNumber}
-                hole={hole}
-                format={props.format}
-                europePlayers={props.europePlayers}
-                usaPlayers={props.usaPlayers}
-                euPlayerStrokes={props.playerStrokes.europe.map((ps) => ps[i] ?? 0)}
-                usaPlayerStrokes={props.playerStrokes.usa.map((ps) => ps[i] ?? 0)}
-                euScores={holeScores[i]?.europeGross ?? []}
-                usaScores={holeScores[i]?.usaGross ?? []}
-                winner={winners[i] ?? null}
-                onSetScore={(side, playerIdx, score) =>
-                  setScore(side, playerIdx, hole.holeNumber, score)
-                }
-              />
-            ))}
+            {props.holes.map((hole, i) => {
+              // Best ball: individual player strokes. Singles/scramble: team-level allocation.
+              const isBestBall = props.format === "best_ball";
+              const euPlayerStrokes = isBestBall
+                ? props.playerStrokes.europe.map((ps) => ps[i] ?? 0)
+                : [props.teamStrokes.europe[i] ?? 0];
+              const usaPlayerStrokes = isBestBall
+                ? props.playerStrokes.usa.map((ps) => ps[i] ?? 0)
+                : [props.teamStrokes.usa[i] ?? 0];
+
+              return (
+                <HoleRow
+                  key={hole.holeNumber}
+                  hole={hole}
+                  format={props.format}
+                  europePlayers={props.europePlayers}
+                  usaPlayers={props.usaPlayers}
+                  euPlayerStrokes={euPlayerStrokes}
+                  usaPlayerStrokes={usaPlayerStrokes}
+                  euScores={holeScores[i]?.europeGross ?? []}
+                  usaScores={holeScores[i]?.usaGross ?? []}
+                  winner={winners[i] ?? null}
+                  onSetScore={(side, playerIdx, score) =>
+                    setScore(side, playerIdx, hole.holeNumber, score)
+                  }
+                />
+              );
+            })}
           </ul>
         </CardContent>
       </Card>

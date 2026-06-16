@@ -75,7 +75,8 @@ export function useMatchSync(
     if (!supabase || queueRef.current.size === 0) return;
 
     for (const [holeNumber, entry] of [...queueRef.current.entries()]) {
-      const { error } = await supabase.from("hole_results").upsert(
+      // Try with score columns first; fall back to winner-only if columns don't exist yet.
+      let { error } = await supabase.from("hole_results").upsert(
         {
           match_id: matchId,
           hole_number: holeNumber,
@@ -85,6 +86,14 @@ export function useMatchSync(
         },
         { onConflict: "match_id,hole_number" },
       );
+      if (error) {
+        // Score columns may not exist yet — retry with just winner.
+        const fallback = await supabase.from("hole_results").upsert(
+          { match_id: matchId, hole_number: holeNumber, winner: entry.winner },
+          { onConflict: "match_id,hole_number" },
+        );
+        error = fallback.error;
+      }
       if (error) {
         setSynced(false);
         return;

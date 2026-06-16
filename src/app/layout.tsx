@@ -43,7 +43,7 @@ export default function RootLayout({
               backgroundImage: "url('/logo.png')",
               backgroundRepeat: "repeat",
               backgroundSize: "140px 140px",
-              opacity: 0.045,
+              opacity: 0.07,
             }}
           />
           <OfflineBanner />
