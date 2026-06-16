@@ -57,7 +57,7 @@ export async function lockAdmin(): Promise<ActionResult> {
 
 export async function createPlayer(input: {
   name: string;
-  team: "europe" | "usa";
+  team: "europe" | "usa" | null;
   handicap: number;
 }): Promise<ActionResult> {
   const a = await requireAdmin();

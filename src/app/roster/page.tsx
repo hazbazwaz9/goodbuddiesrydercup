@@ -10,7 +10,9 @@ export default async function RosterPage() {
     <div className="space-y-4">
       <div>
         <h1 className="text-xl font-semibold">Roster</h1>
-        <p className="text-sm text-muted-foreground">Europe vs USA — the two teams.</p>
+        <p className="text-sm text-muted-foreground">
+          The player pool and, once drafted, the two teams.
+        </p>
       </div>
       <RosterClient players={t.players} />
     </div>

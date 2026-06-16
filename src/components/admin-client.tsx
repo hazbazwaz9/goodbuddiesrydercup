@@ -139,17 +139,23 @@ function PlayersTab({ players }: { players: PlayerLite[] }) {
 function AddPlayerDialog() {
   const [open, setOpen] = useState(false);
   const [name, setName] = useState("");
-  const [team, setTeam] = useState<Team>("europe");
+  const [team, setTeam] = useState<string>("none");
   const [handicap, setHandicap] = useState("18");
   const { pending, run } = useAction();
 
   function submit() {
     run(
-      () => createPlayer({ name, team, handicap: Number(handicap) || 0 }),
+      () =>
+        createPlayer({
+          name,
+          team: team === "none" ? null : (team as Team),
+          handicap: Number(handicap) || 0,
+        }),
       "Player added",
     );
     setOpen(false);
     setName("");
+    setTeam("none");
   }
 
   return (
@@ -167,7 +173,7 @@ function AddPlayerDialog() {
           </Field>
           <div className="grid grid-cols-2 gap-3">
             <Field label="Team">
-              <TeamSelect value={team} onChange={(v) => setTeam(v as Team)} />
+              <TeamSelect value={team} onChange={setTeam} allowNone />
             </Field>
             <Field label="Handicap">
               <Input
