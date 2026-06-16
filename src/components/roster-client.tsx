@@ -23,7 +23,8 @@ function PlayerRows({ players }: { players: PlayerLite[] }) {
 
 export function RosterClient({ players }: { players: PlayerLite[] }) {
   const teams: Team[] = ["europe", "usa"];
-  const unassigned = players.filter((p) => !p.team);
+  const sorted = [...players].sort((a, b) => a.handicap - b.handicap);
+  const unassigned = sorted.filter((p) => !p.team);
 
   return (
     <div className="space-y-4">
@@ -43,7 +44,7 @@ export function RosterClient({ players }: { players: PlayerLite[] }) {
 
       <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
         {teams.map((team) => {
-          const roster = players.filter((p) => p.team === team);
+          const roster = sorted.filter((p) => p.team === team);
           return (
             <Card key={team}>
               <CardHeader

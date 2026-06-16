@@ -46,11 +46,8 @@ export function useMatchSync(
   const [serverWinners, setServerWinners] = useState<HoleWinner[]>(initialWinners);
 
   const winners: HoleWinner[] = holeScores.map((s, i) => {
-    const hasScores =
-      s.europeGross.some((g) => g != null) || s.usaGross.some((g) => g != null);
-    if (hasScores) {
-      return computeHoleWinner(format, s.europeGross, s.usaGross, euHcps, usaHcps, holes[i]);
-    }
+    const computed = computeHoleWinner(format, s.europeGross, s.usaGross, euHcps, usaHcps, holes[i]);
+    if (computed !== null) return computed;
     return serverWinners[i] ?? null;
   });
 
@@ -75,21 +72,27 @@ export function useMatchSync(
     if (!supabase || queueRef.current.size === 0) return;
 
     for (const [holeNumber, entry] of [...queueRef.current.entries()]) {
+      // Only include winner when non-null — never overwrite a saved winner with
+      // null from a partial score entry (one side not yet scored).
+      const payload: Record<string, unknown> = {
+        match_id: matchId,
+        hole_number: holeNumber,
+        europe_gross: entry.europeGross.filter((g) => g != null),
+        usa_gross: entry.usaGross.filter((g) => g != null),
+      };
+      if (entry.winner !== null) payload.winner = entry.winner;
+
       // Try with score columns first; fall back to winner-only if columns don't exist yet.
       let { error } = await supabase.from("hole_results").upsert(
-        {
-          match_id: matchId,
-          hole_number: holeNumber,
-          winner: entry.winner,
-          europe_gross: entry.europeGross.filter((g) => g != null),
-          usa_gross: entry.usaGross.filter((g) => g != null),
-        },
+        payload,
         { onConflict: "match_id,hole_number" },
       );
       if (error) {
         // Score columns may not exist yet — retry with just winner.
+        const fallbackPayload: Record<string, unknown> = { match_id: matchId, hole_number: holeNumber };
+        if (entry.winner !== null) fallbackPayload.winner = entry.winner;
         const fallback = await supabase.from("hole_results").upsert(
-          { match_id: matchId, hole_number: holeNumber, winner: entry.winner },
+          fallbackPayload,
           { onConflict: "match_id,hole_number" },
         );
         error = fallback.error;
