@@ -34,7 +34,9 @@ export default async function MatchPage({
         usaPlayers={match.usaPlayers}
         holes={match.holes}
         teamStrokes={match.teamStrokes}
+        playerStrokes={match.playerStrokes}
         initialWinners={match.holeWinners}
+        initialScores={match.holeScores}
       />
     </div>
   );

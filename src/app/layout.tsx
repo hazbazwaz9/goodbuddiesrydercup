@@ -36,6 +36,16 @@ export default function RootLayout({
     >
       <body className="min-h-full flex flex-col">
         <Providers>
+          {/* Tiled logo watermark behind all content */}
+          <div
+            className="pointer-events-none fixed inset-0 -z-10"
+            style={{
+              backgroundImage: "url('/logo.png')",
+              backgroundRepeat: "repeat",
+              backgroundSize: "140px 140px",
+              opacity: 0.045,
+            }}
+          />
           <OfflineBanner />
           <TopBar />
           <main className="mx-auto w-full max-w-2xl flex-1 px-4 py-4">{children}</main>

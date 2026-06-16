@@ -148,6 +148,59 @@ export interface MatchStatus {
 }
 
 /**
+ * Auto-compute who wins a hole given gross scores and handicap strokes.
+ * Returns null if neither side has any scores yet.
+ */
+export function computeHoleWinner(
+  format: MatchFormat,
+  euGross: (number | null)[],
+  usaGross: (number | null)[],
+  euHcps: number[],
+  usaHcps: number[],
+  hole: CourseHole,
+): HoleWinner {
+  const holeArr = [hole];
+
+  if (format === "best_ball") {
+    const euNets = euGross.map((g, i) =>
+      g != null ? g - strokesForHandicap(euHcps[i] ?? 0, holeArr)[0] : Infinity,
+    );
+    const usaNets = usaGross.map((g, i) =>
+      g != null ? g - strokesForHandicap(usaHcps[i] ?? 0, holeArr)[0] : Infinity,
+    );
+    const bestEu = Math.min(...euNets);
+    const bestUsa = Math.min(...usaNets);
+    if (!isFinite(bestEu) || !isFinite(bestUsa)) return null;
+    if (bestEu < bestUsa) return "europe";
+    if (bestUsa < bestEu) return "usa";
+    return "halved";
+  }
+
+  if (format === "scramble") {
+    const alloc = scrambleAllocation(euHcps, usaHcps, holeArr);
+    const euNet = (euGross[0] ?? null);
+    const usaNet = (usaGross[0] ?? null);
+    if (euNet == null || usaNet == null) return null;
+    const euAdj = euNet - alloc.europeStrokes[0];
+    const usaAdj = usaNet - alloc.usaStrokes[0];
+    if (euAdj < usaAdj) return "europe";
+    if (usaAdj < euAdj) return "usa";
+    return "halved";
+  }
+
+  // singles
+  const alloc = singlesAllocation(euHcps[0] ?? 0, usaHcps[0] ?? 0, holeArr);
+  const euG = euGross[0] ?? null;
+  const usaG = usaGross[0] ?? null;
+  if (euG == null || usaG == null) return null;
+  const euAdj = euG - alloc.europeStrokes[0];
+  const usaAdj = usaG - alloc.usaStrokes[0];
+  if (euAdj < usaAdj) return "europe";
+  if (usaAdj < euAdj) return "usa";
+  return "halved";
+}
+
+/**
  * Compute match-play status from an ordered list of hole results.
  * `results` should be the 18 holes in play order; nulls (unplayed) are ignored
  * for the win count but still consume a hole position for "remaining".

@@ -24,6 +24,8 @@ export default async function LeaderboardPage() {
       <ScoreHero
         europeTotal={t.europeTotal}
         usaTotal={t.usaTotal}
+        europeProjected={t.europeProjected}
+        usaProjected={t.usaProjected}
         pointsToWin={t.pointsToWin}
         winner={t.winner}
         live

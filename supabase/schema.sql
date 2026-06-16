@@ -65,11 +65,13 @@ create table public.matches (
 );
 
 create table public.hole_results (
-  id           serial primary key,
-  match_id     integer not null references public.matches(id) on delete cascade,
-  hole_number  integer not null,
-  winner       hole_winner,
-  updated_at   timestamptz not null default now(),
+  id            serial primary key,
+  match_id      integer not null references public.matches(id) on delete cascade,
+  hole_number   integer not null,
+  winner        hole_winner,
+  europe_gross  integer[],
+  usa_gross     integer[],
+  updated_at    timestamptz not null default now(),
   unique (match_id, hole_number)
 );
 
@@ -146,8 +148,7 @@ insert into public.golf_sessions (session_number, format, name, is_active) value
   (2, 'scramble',  'Session 2 — Scramble',  false),
   (3, 'singles',   'Session 3 — Singles',   false);
 
--- Placeholder stroke index (stroke_index = hole_number). Replace with the real
--- course stroke index before the tournament.
+-- Real course stroke index and par (updated from scorecard).
 insert into public.course_holes (hole_number, stroke_index, par) values
-  (1,1,4),(2,2,5),(3,3,4),(4,4,3),(5,5,4),(6,6,4),(7,7,5),(8,8,3),(9,9,4),
-  (10,10,4),(11,11,4),(12,12,5),(13,13,3),(14,14,4),(15,15,4),(16,16,3),(17,17,5),(18,18,4);
+  (1,15,5),(2,9,4),(3,13,4),(4,1,4),(5,7,3),(6,17,5),(7,11,4),(8,5,3),(9,3,4),
+  (10,14,5),(11,6,4),(12,2,4),(13,18,4),(14,4,4),(15,10,3),(16,12,4),(17,16,3),(18,8,5);

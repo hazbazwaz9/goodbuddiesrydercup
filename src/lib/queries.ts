@@ -3,11 +3,15 @@ import { isSupabaseConfigured } from "./supabase/config";
 import {
   computeMatchStatus,
   teamStrokesPerHole,
+  bestBallStrokes,
+  singlesAllocation,
+  scrambleAllocation,
+  strokesForHandicap,
   type CourseHole,
   type HoleWinner,
   type MatchFormat,
 } from "./golf";
-import type { MatchView, PlayerLite, SessionView, TournamentView } from "./types";
+import type { HoleScore, MatchView, PlayerLite, SessionView, TournamentView } from "./types";
 
 /** 16 players → first team to 8.5 of 16 points wins. */
 const POINTS_TO_WIN = 8.5;
@@ -17,6 +21,8 @@ const EMPTY_TOURNAMENT: TournamentView = {
   players: [],
   europeTotal: 0,
   usaTotal: 0,
+  europeProjected: 0,
+  usaProjected: 0,
   pointsToWin: POINTS_TO_WIN,
   winner: null,
   configured: false,
@@ -75,6 +81,8 @@ export async function getTournament(): Promise<TournamentView> {
 
   let europeTotal = 0;
   let usaTotal = 0;
+  let europeProjected = 0;
+  let usaProjected = 0;
 
   for (const m of matchesRes.data ?? []) {
     const session = sessionById.get(m.session_id);
@@ -84,6 +92,13 @@ export async function getTournament(): Promise<TournamentView> {
     const status = computeMatchStatus(holeWinners);
     europeTotal += status.points.europe;
     usaTotal += status.points.usa;
+
+    // Project in-progress matches: current leader gets 1 point projected, all-square = 0.5 each
+    if (!status.isComplete && status.holesPlayed > 0) {
+      if (status.leader === "europe") europeProjected += 1;
+      else if (status.leader === "usa") usaProjected += 1;
+      else { europeProjected += 0.5; usaProjected += 0.5; }
+    }
 
     const view: MatchView = {
       id: m.id,
@@ -112,6 +127,8 @@ export async function getTournament(): Promise<TournamentView> {
     players: [...playerMap.values()],
     europeTotal,
     usaTotal,
+    europeProjected,
+    usaProjected,
     pointsToWin: POINTS_TO_WIN,
     winner,
     configured: true,
@@ -136,15 +153,24 @@ export async function getCourseHoles(): Promise<CourseHole[]> {
 export interface MatchDetail extends MatchView {
   sessionName: string;
   holes: CourseHole[];
-  /** Advisory strokes each team receives per hole (index 0..17). */
+  /** Advisory strokes each TEAM receives per hole (index 0..17). */
   teamStrokes: { europe: number[]; usa: number[] };
+  /**
+   * Individual strokes per player per hole.
+   * playerStrokes.europe[playerIdx][holeIdx] = strokes that player receives.
+   */
+  playerStrokes: { europe: number[][]; usa: number[][] };
+  /** Gross scores previously saved to the DB. */
+  holeScores: HoleScore[];
 }
 
 /** Single match with course holes and per-player stroke allocation for scoring. */
 export async function getMatchDetail(matchId: number): Promise<MatchDetail | null> {
   if (!isSupabaseConfigured) return null;
 
+  const supabase = await createSupabaseServerClient();
   const tournament = await getTournament();
+
   let found: MatchView | undefined;
   let sessionName = "";
   for (const s of tournament.sessions) {
@@ -158,6 +184,13 @@ export async function getMatchDetail(matchId: number): Promise<MatchDetail | nul
   if (!found) return null;
 
   const holes = await getCourseHoles();
+
+  // Per-player strokes per hole
+  const playerStrokes = {
+    europe: found.europePlayers.map((p) => strokesForHandicap(p.handicap, holes)),
+    usa: found.usaPlayers.map((p) => strokesForHandicap(p.handicap, holes)),
+  };
+
   const teamStrokes = teamStrokesPerHole(
     found.format,
     found.europePlayers.map((p) => p.handicap),
@@ -165,5 +198,34 @@ export async function getMatchDetail(matchId: number): Promise<MatchDetail | nul
     holes,
   );
 
-  return { ...found, sessionName, holes, teamStrokes };
+  // Fetch saved gross scores
+  const { data: scoreRows } = await supabase
+    .from("hole_results")
+    .select("hole_number, europe_gross, usa_gross")
+    .eq("match_id", matchId);
+
+  const scoresByHole = new Map<number, { europeGross: (number | null)[]; usaGross: (number | null)[] }>();
+  for (const row of scoreRows ?? []) {
+    scoresByHole.set(row.hole_number, {
+      europeGross: (row.europe_gross as number[] | null) ?? [],
+      usaGross: (row.usa_gross as number[] | null) ?? [],
+    });
+  }
+
+  const holeScores: HoleScore[] = holes.map((h) => {
+    const saved = scoresByHole.get(h.holeNumber);
+    const euCount = found!.europePlayers.length;
+    const usaCount = found!.usaPlayers.length;
+    return {
+      holeNumber: h.holeNumber,
+      europeGross: saved?.europeGross.length
+        ? saved.europeGross.concat(Array(Math.max(0, euCount - saved.europeGross.length)).fill(null))
+        : Array(euCount).fill(null),
+      usaGross: saved?.usaGross.length
+        ? saved.usaGross.concat(Array(Math.max(0, usaCount - saved.usaGross.length)).fill(null))
+        : Array(usaCount).fill(null),
+    };
+  });
+
+  return { ...found, sessionName, holes, teamStrokes, playerStrokes, holeScores };
 }

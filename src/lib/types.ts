@@ -30,11 +30,22 @@ export interface SessionView {
   matches: MatchView[];
 }
 
+/** Gross scores for a single hole (null = not yet entered). */
+export interface HoleScore {
+  holeNumber: number;
+  europeGross: (number | null)[];
+  usaGross: (number | null)[];
+}
+
 export interface TournamentView {
   sessions: SessionView[];
   players: PlayerLite[];
+  /** Points from completed matches only (official score). */
   europeTotal: number;
   usaTotal: number;
+  /** Projected points from in-progress matches (live leader gets 1, all-square 0.5 each). */
+  europeProjected: number;
+  usaProjected: number;
   pointsToWin: number;
   winner: Team | null;
   configured: boolean;

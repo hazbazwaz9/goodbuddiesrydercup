@@ -6,7 +6,8 @@ import { useMatchSync } from "@/lib/use-match-sync";
 import { cn } from "@/lib/utils";
 import { Card, CardContent } from "@/components/ui/card";
 import { Cloud, CloudOff, Check } from "lucide-react";
-import type { PlayerLite } from "@/lib/types";
+import type { HoleScore, PlayerLite } from "@/lib/types";
+import type { MatchFormat } from "@/lib/golf";
 
 const FORMAT_LABEL: Record<string, string> = {
   best_ball: "Best Ball · 2v2 · full handicap",
@@ -16,19 +17,29 @@ const FORMAT_LABEL: Record<string, string> = {
 
 export interface ScorecardProps {
   matchId: number;
-  format: "best_ball" | "scramble" | "singles";
+  format: MatchFormat;
   sessionName: string;
   europePlayers: PlayerLite[];
   usaPlayers: PlayerLite[];
   holes: CourseHole[];
   teamStrokes: { europe: number[]; usa: number[] };
+  /** Per-player strokes: playerStrokes.europe[playerIdx][holeIdx] */
+  playerStrokes: { europe: number[][]; usa: number[][] };
   initialWinners: HoleWinner[];
+  initialScores: HoleScore[];
 }
 
 export function MatchScorecard(props: ScorecardProps) {
-  const { winners, setWinner, pendingCount, synced } = useMatchSync(
+  const { winners, holeScores, setScore, pendingCount, synced } = useMatchSync(
     props.matchId,
-    props.initialWinners,
+    {
+      format: props.format,
+      euHcps: props.europePlayers.map((p) => p.handicap),
+      usaHcps: props.usaPlayers.map((p) => p.handicap),
+      holes: props.holes,
+      initialWinners: props.initialWinners,
+      initialScores: props.initialScores,
+    },
   );
 
   const status = useMemo(() => computeMatchStatus(winners), [winners]);
@@ -70,19 +81,25 @@ export function MatchScorecard(props: ScorecardProps) {
       {/* Scorecard */}
       <Card>
         <CardContent className="p-0">
-          <div className="grid grid-cols-[2.2rem_1fr] items-center gap-2 border-b px-3 py-2 text-[11px] font-medium uppercase tracking-wide text-muted-foreground">
-            <span>Hole</span>
-            <span className="text-center">Tap the winner of each hole</span>
+          <div className="border-b px-3 py-2 text-[11px] font-medium uppercase tracking-wide text-muted-foreground">
+            Enter gross scores — winner computed automatically
           </div>
           <ul className="divide-y">
             {props.holes.map((hole, i) => (
               <HoleRow
                 key={hole.holeNumber}
                 hole={hole}
-                euStrokes={props.teamStrokes.europe[i] ?? 0}
-                usaStrokes={props.teamStrokes.usa[i] ?? 0}
+                format={props.format}
+                europePlayers={props.europePlayers}
+                usaPlayers={props.usaPlayers}
+                euPlayerStrokes={props.playerStrokes.europe.map((ps) => ps[i] ?? 0)}
+                usaPlayerStrokes={props.playerStrokes.usa.map((ps) => ps[i] ?? 0)}
+                euScores={holeScores[i]?.europeGross ?? []}
+                usaScores={holeScores[i]?.usaGross ?? []}
                 winner={winners[i] ?? null}
-                onSet={(w) => setWinner(hole.holeNumber, w)}
+                onSetScore={(side, playerIdx, score) =>
+                  setScore(side, playerIdx, hole.holeNumber, score)
+                }
               />
             ))}
           </ul>
@@ -92,13 +109,7 @@ export function MatchScorecard(props: ScorecardProps) {
   );
 }
 
-function SyncIndicator({
-  pendingCount,
-  synced,
-}: {
-  pendingCount: number;
-  synced: boolean;
-}) {
+function SyncIndicator({ pendingCount, synced }: { pendingCount: number; synced: boolean }) {
   if (pendingCount > 0 && !synced)
     return (
       <span className="flex items-center gap-1 text-xs text-amber-600">
@@ -149,93 +160,175 @@ function TeamHeading({
 
 function HoleRow({
   hole,
-  euStrokes,
-  usaStrokes,
+  format,
+  europePlayers,
+  usaPlayers,
+  euPlayerStrokes,
+  usaPlayerStrokes,
+  euScores,
+  usaScores,
   winner,
-  onSet,
+  onSetScore,
 }: {
   hole: CourseHole;
-  euStrokes: number;
-  usaStrokes: number;
+  format: MatchFormat;
+  europePlayers: PlayerLite[];
+  usaPlayers: PlayerLite[];
+  euPlayerStrokes: number[];
+  usaPlayerStrokes: number[];
+  euScores: (number | null)[];
+  usaScores: (number | null)[];
   winner: HoleWinner;
-  onSet: (w: HoleWinner) => void;
+  onSetScore: (side: "eu" | "usa", playerIdx: number, score: number | null) => void;
 }) {
-  // Tapping the active option again clears it back to "not played".
-  const toggle = (w: HoleWinner) => onSet(winner === w ? null : w);
+  const isSinglesOrScramble = format === "singles" || format === "scramble";
 
   return (
-    <li className="grid grid-cols-[2.2rem_1fr] items-center gap-2 px-3 py-2">
-      <div className="text-center">
-        <div className="text-base font-bold leading-none">{hole.holeNumber}</div>
-        <div className="text-[10px] text-muted-foreground">
-          par{hole.par}·SI{hole.strokeIndex}
+    <li className="px-3 py-2.5">
+      {/* Hole info row */}
+      <div className="mb-2 flex items-center gap-2">
+        <span className="flex h-7 w-7 items-center justify-center rounded-full bg-muted text-sm font-bold">
+          {hole.holeNumber}
+        </span>
+        <span className="text-[11px] text-muted-foreground">
+          par {hole.par} · SI {hole.strokeIndex}
+        </span>
+        {winner && (
+          <span
+            className={cn(
+              "ml-auto rounded-full px-2 py-0.5 text-[10px] font-bold uppercase tracking-wide",
+              winner === "europe" && "bg-europe text-europe-foreground",
+              winner === "usa" && "bg-usa text-usa-foreground",
+              winner === "halved" && "bg-muted text-foreground",
+            )}
+          >
+            {winner === "europe" ? "EU wins" : winner === "usa" ? "USA wins" : "Halved"}
+          </span>
+        )}
+      </div>
+
+      {/* Score inputs */}
+      {isSinglesOrScramble ? (
+        <div className="grid grid-cols-[1fr_1fr] gap-2">
+          <PlayerScoreInput
+            label={format === "singles" ? europePlayers[0]?.name ?? "Europe" : "Europe"}
+            team="europe"
+            strokes={euPlayerStrokes[0] ?? 0}
+            value={euScores[0] ?? null}
+            onChange={(v) => onSetScore("eu", 0, v)}
+          />
+          <PlayerScoreInput
+            label={format === "singles" ? usaPlayers[0]?.name ?? "USA" : "USA"}
+            team="usa"
+            strokes={usaPlayerStrokes[0] ?? 0}
+            value={usaScores[0] ?? null}
+            onChange={(v) => onSetScore("usa", 0, v)}
+          />
         </div>
-      </div>
-      <div className="grid grid-cols-[1fr_2.5rem_1fr] gap-1">
-        <SegButton
-          team="europe"
-          active={winner === "europe"}
-          strokes={euStrokes}
-          onClick={() => toggle("europe")}
-        />
-        <button
-          type="button"
-          onClick={() => toggle("halved")}
-          className={cn(
-            "rounded-md py-2 text-xs font-semibold transition-colors disabled:opacity-50",
-            winner === "halved"
-              ? "bg-foreground text-background"
-              : "bg-muted text-muted-foreground hover:bg-muted/70",
-          )}
-        >
-          ½
-        </button>
-        <SegButton
-          team="usa"
-          active={winner === "usa"}
-          strokes={usaStrokes}
-          onClick={() => toggle("usa")}
-        />
-      </div>
+      ) : (
+        /* Best ball: 2 players per side */
+        <div className="grid grid-cols-2 gap-2">
+          <div className="space-y-1.5">
+            {europePlayers.map((p, pi) => (
+              <PlayerScoreInput
+                key={p.id}
+                label={p.name}
+                team="europe"
+                strokes={euPlayerStrokes[pi] ?? 0}
+                value={euScores[pi] ?? null}
+                onChange={(v) => onSetScore("eu", pi, v)}
+              />
+            ))}
+          </div>
+          <div className="space-y-1.5">
+            {usaPlayers.map((p, pi) => (
+              <PlayerScoreInput
+                key={p.id}
+                label={p.name}
+                team="usa"
+                strokes={usaPlayerStrokes[pi] ?? 0}
+                value={usaScores[pi] ?? null}
+                onChange={(v) => onSetScore("usa", pi, v)}
+              />
+            ))}
+          </div>
+        </div>
+      )}
     </li>
   );
 }
 
-function SegButton({
+function PlayerScoreInput({
+  label,
   team,
-  active,
   strokes,
-  onClick,
+  value,
+  onChange,
 }: {
+  label: string;
   team: "europe" | "usa";
-  active: boolean;
   strokes: number;
-  onClick: () => void;
+  value: number | null;
+  onChange: (v: number | null) => void;
 }) {
+  const hasStroke = strokes > 0;
+
   return (
-    <button
-      type="button"
-      onClick={onClick}
+    <div
       className={cn(
-        "relative flex items-center justify-center rounded-md py-2 text-xs font-semibold transition-colors disabled:opacity-50",
-        active
-          ? team === "europe"
-            ? "bg-europe text-europe-foreground"
-            : "bg-usa text-usa-foreground"
-          : team === "europe"
-            ? "bg-europe/10 text-europe hover:bg-europe/20"
-            : "bg-usa/10 text-usa hover:bg-usa/20",
+        "flex items-center justify-between rounded-lg border px-2 py-1.5 transition-colors",
+        hasStroke && team === "europe" && "border-europe/40 bg-europe/5",
+        hasStroke && team === "usa" && "border-usa/40 bg-usa/5",
+        !hasStroke && "border-border bg-transparent",
       )}
     >
-      {team === "europe" ? "Europe" : "USA"}
-      {strokes > 0 && (
-        <span
-          className="absolute right-1 top-0.5 text-[9px] font-bold opacity-80"
-          title={`${strokes} stroke${strokes > 1 ? "s" : ""} here`}
+      <div className="min-w-0 flex-1">
+        <p className="truncate text-[11px] font-medium leading-tight">{label}</p>
+        {hasStroke && (
+          <p
+            className={cn(
+              "text-[10px] font-bold",
+              team === "europe" ? "text-europe" : "text-usa",
+            )}
+          >
+            {"▼".repeat(strokes)} stroke{strokes > 1 ? "s" : ""}
+          </p>
+        )}
+      </div>
+      <div className="ml-2 flex items-center gap-0.5">
+        <button
+          type="button"
+          onClick={() => onChange(value != null ? Math.max(1, value - 1) : null)}
+          disabled={value == null}
+          className="flex h-6 w-6 items-center justify-center rounded text-muted-foreground hover:bg-muted disabled:opacity-30"
+          aria-label="Decrease"
         >
-          {"•".repeat(strokes)}
-        </span>
-      )}
-    </button>
+          −
+        </button>
+        <button
+          type="button"
+          onClick={() => onChange(value != null ? value : 4)}
+          className={cn(
+            "min-w-[2rem] rounded px-1 py-0.5 text-center font-mono text-sm font-bold tabular-nums",
+            value != null
+              ? team === "europe"
+                ? "bg-europe text-europe-foreground"
+                : "bg-usa text-usa-foreground"
+              : "bg-muted text-muted-foreground",
+          )}
+          aria-label="Score"
+        >
+          {value ?? "—"}
+        </button>
+        <button
+          type="button"
+          onClick={() => onChange(value != null ? value + 1 : 4)}
+          className="flex h-6 w-6 items-center justify-center rounded text-muted-foreground hover:bg-muted"
+          aria-label="Increase"
+        >
+          +
+        </button>
+      </div>
+    </div>
   );
 }
