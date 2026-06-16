@@ -28,6 +28,9 @@ export function RealtimeRefresher() {
       .on("postgres_changes", { event: "*", schema: "public", table: "matches" }, () =>
         router.refresh(),
       )
+      .on("postgres_changes", { event: "*", schema: "public", table: "session_contests" }, () =>
+        router.refresh(),
+      )
       .subscribe();
 
     // Fallback poll every 10 s in case the realtime socket drops on spotty signal.

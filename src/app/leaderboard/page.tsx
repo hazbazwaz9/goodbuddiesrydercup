@@ -1,6 +1,7 @@
 import { getTournament } from "@/lib/queries";
 import { ScoreHero } from "@/components/score-hero";
 import { SessionCard } from "@/components/session-card";
+import { SessionContests } from "@/components/session-contests";
 import { SetupNotice } from "@/components/setup-notice";
 import { RealtimeRefresher } from "@/components/realtime-refresher";
 
@@ -27,11 +28,15 @@ export default async function LeaderboardPage() {
         europeProjected={t.europeProjected}
         usaProjected={t.usaProjected}
         pointsToWin={t.pointsToWin}
+        totalPoints={t.totalPoints}
         winner={t.winner}
         live
       />
       {t.sessions.map((s) => (
-        <SessionCard key={s.id} session={s} linkMatches />
+        <div key={s.id} className="space-y-2">
+          <SessionCard session={s} linkMatches />
+          <SessionContests session={s} players={t.players} />
+        </div>
       ))}
       {t.sessions.every((s) => s.matches.length === 0) && (
         <p className="py-8 text-center text-sm text-muted-foreground">

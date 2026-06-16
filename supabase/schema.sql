@@ -10,6 +10,7 @@
 
 -- ---------- Teardown (old auth-based objects) ----------
 drop trigger if exists on_auth_user_created on auth.users;
+drop table if exists public.session_contests cascade;
 drop table if exists public.hole_results cascade;
 drop table if exists public.matches cascade;
 drop table if exists public.course_holes cascade;
@@ -75,6 +76,17 @@ create table public.hole_results (
   unique (match_id, hole_number)
 );
 
+-- Per-session side contests (Long Drive, Closest to the Pin). The winning
+-- player's team earns half a point. Winner is nullable until decided.
+create table public.session_contests (
+  id               serial primary key,
+  session_id       integer not null references public.golf_sessions(id) on delete cascade,
+  contest_type     text not null check (contest_type in ('long_drive','closest_pin')),
+  winner_player_id uuid references public.players(id) on delete set null,
+  updated_at       timestamptz not null default now(),
+  unique (session_id, contest_type)
+);
+
 -- ---------- Match recompute (authoritative points, server-side) ----------
 create or replace function public.recompute_match(p_match_id integer)
 returns void language plpgsql security definer set search_path = public as $$
@@ -115,11 +127,12 @@ create trigger hole_results_recompute
   for each row execute function public.on_hole_result_change();
 
 -- ---------- Row-Level Security ----------
-alter table public.players       enable row level security;
-alter table public.golf_sessions enable row level security;
-alter table public.course_holes  enable row level security;
-alter table public.matches       enable row level security;
-alter table public.hole_results  enable row level security;
+alter table public.players          enable row level security;
+alter table public.golf_sessions    enable row level security;
+alter table public.course_holes     enable row level security;
+alter table public.matches          enable row level security;
+alter table public.hole_results     enable row level security;
+alter table public.session_contests enable row level security;
 
 -- Everyone can read everything (the whole app is public).
 create policy players_select  on public.players       for select using (true);
@@ -134,12 +147,20 @@ create policy results_select  on public.hole_results   for select using (true);
 create policy results_insert on public.hole_results for insert with check (true);
 create policy results_update on public.hole_results for update using (true) with check (true);
 
+-- Side contests are public read + public write (selected on the matches page).
+create policy contests_select on public.session_contests for select using (true);
+create policy contests_insert on public.session_contests for insert with check (true);
+create policy contests_update on public.session_contests for update using (true) with check (true);
+
 -- ---------- Realtime ----------
 do $$ begin
   alter publication supabase_realtime add table public.matches;
 exception when duplicate_object then null; end $$;
 do $$ begin
   alter publication supabase_realtime add table public.hole_results;
+exception when duplicate_object then null; end $$;
+do $$ begin
+  alter publication supabase_realtime add table public.session_contests;
 exception when duplicate_object then null; end $$;
 
 -- ---------- Static reference data ----------

@@ -11,10 +11,24 @@ import {
   type HoleWinner,
   type MatchFormat,
 } from "./golf";
-import type { HoleScore, MatchView, PlayerLite, SessionView, TournamentView } from "./types";
+import type {
+  ContestResult,
+  HoleScore,
+  MatchView,
+  PlayerLite,
+  SessionView,
+  TournamentView,
+} from "./types";
 
-/** 16 players → first team to 8.5 of 16 points wins. */
-const POINTS_TO_WIN = 8.5;
+/** 16 matches @ 1 pt each. */
+const MATCH_POINTS = 16;
+/** Each session has 2 side contests (Long Drive, Closest to Pin) worth 0.5 each. */
+const CONTEST_POINTS_PER_SESSION = 1;
+
+const EMPTY_CONTESTS = {
+  longDrive: { winnerPlayerId: null, winnerName: null, winnerTeam: null } as ContestResult,
+  closestPin: { winnerPlayerId: null, winnerName: null, winnerTeam: null } as ContestResult,
+};
 
 const EMPTY_TOURNAMENT: TournamentView = {
   sessions: [],
@@ -23,7 +37,8 @@ const EMPTY_TOURNAMENT: TournamentView = {
   usaTotal: 0,
   europeProjected: 0,
   usaProjected: 0,
-  pointsToWin: POINTS_TO_WIN,
+  pointsToWin: MATCH_POINTS / 2 + 0.5,
+  totalPoints: MATCH_POINTS,
   winner: null,
   configured: false,
 };
@@ -44,16 +59,19 @@ export async function getTournament(): Promise<TournamentView> {
 
   const supabase = await createSupabaseServerClient();
 
-  const [playersRes, sessionsRes, matchesRes, holesRes] = await Promise.all([
+  const [playersRes, sessionsRes, matchesRes, holesRes, contestsRes] = await Promise.all([
     supabase.from("players").select("id, name, handicap, team"),
     supabase.from("golf_sessions").select("*").order("session_number"),
     supabase.from("matches").select("*").order("match_order"),
     supabase.from("hole_results").select("match_id, hole_number, winner"),
+    supabase.from("session_contests").select("session_id, contest_type, winner_player_id"),
   ]);
 
   if (playersRes.error || sessionsRes.error || matchesRes.error || holesRes.error) {
     return EMPTY_TOURNAMENT;
   }
+  // session_contests may not exist yet on older DBs — treat as no contests.
+  const contestRows = contestsRes.error ? [] : contestsRes.data ?? [];
 
   const playerMap = new Map<string, PlayerLite>(
     (playersRes.data ?? []).map((p) => [
@@ -69,6 +87,24 @@ export async function getTournament(): Promise<TournamentView> {
     holesByMatch.set(h.match_id, list);
   }
 
+  // Index contest winners by session + type.
+  const contestBySession = new Map<number, Map<string, string | null>>();
+  for (const c of contestRows) {
+    const byType = contestBySession.get(c.session_id) ?? new Map<string, string | null>();
+    byType.set(c.contest_type, c.winner_player_id);
+    contestBySession.set(c.session_id, byType);
+  }
+
+  const resolveContest = (sessionId: number, type: string): ContestResult => {
+    const playerId = contestBySession.get(sessionId)?.get(type) ?? null;
+    const player = playerId ? playerMap.get(playerId) : undefined;
+    return {
+      winnerPlayerId: playerId,
+      winnerName: player?.name ?? null,
+      winnerTeam: player?.team ?? null,
+    };
+  };
+
   const sessions: SessionView[] = (sessionsRes.data ?? []).map((s) => ({
     id: s.id,
     sessionNumber: s.session_number,
@@ -76,6 +112,10 @@ export async function getTournament(): Promise<TournamentView> {
     format: s.format as MatchFormat,
     isActive: s.is_active,
     matches: [],
+    contests: {
+      longDrive: resolveContest(s.id, "long_drive"),
+      closestPin: resolveContest(s.id, "closest_pin"),
+    },
   }));
   const sessionById = new Map(sessions.map((s) => [s.id, s]));
 
@@ -83,6 +123,14 @@ export async function getTournament(): Promise<TournamentView> {
   let usaTotal = 0;
   let europeProjected = 0;
   let usaProjected = 0;
+
+  // Side contests: each decided contest awards 0.5 to the winner's team (locked).
+  for (const s of sessions) {
+    for (const contest of [s.contests.longDrive, s.contests.closestPin]) {
+      if (contest.winnerTeam === "europe") europeTotal += 0.5;
+      else if (contest.winnerTeam === "usa") usaTotal += 0.5;
+    }
+  }
 
   for (const m of matchesRes.data ?? []) {
     const session = sessionById.get(m.session_id);
@@ -119,8 +167,11 @@ export async function getTournament(): Promise<TournamentView> {
 
   for (const s of sessions) s.matches.sort((a, b) => a.matchOrder - b.matchOrder);
 
+  const totalPoints = MATCH_POINTS + sessions.length * CONTEST_POINTS_PER_SESSION;
+  const pointsToWin = totalPoints / 2 + 0.5;
+
   const winner =
-    europeTotal >= POINTS_TO_WIN ? "europe" : usaTotal >= POINTS_TO_WIN ? "usa" : null;
+    europeTotal >= pointsToWin ? "europe" : usaTotal >= pointsToWin ? "usa" : null;
 
   return {
     sessions,
@@ -129,7 +180,8 @@ export async function getTournament(): Promise<TournamentView> {
     usaTotal,
     europeProjected,
     usaProjected,
-    pointsToWin: POINTS_TO_WIN,
+    pointsToWin,
+    totalPoints,
     winner,
     configured: true,
   };

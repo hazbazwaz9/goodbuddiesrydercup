@@ -2,14 +2,13 @@ import { cn } from "@/lib/utils";
 import { formatPoints } from "@/lib/brand";
 import type { Team } from "@/lib/golf";
 
-const TOTAL_POINTS = 16;
-
 export function ScoreHero({
   europeTotal,
   usaTotal,
   europeProjected = 0,
   usaProjected = 0,
   pointsToWin,
+  totalPoints = 16,
   winner,
   live = false,
 }: {
@@ -18,6 +17,7 @@ export function ScoreHero({
   europeProjected?: number;
   usaProjected?: number;
   pointsToWin: number;
+  totalPoints?: number;
   winner: Team | null;
   live?: boolean;
 }) {
@@ -56,6 +56,7 @@ export function ScoreHero({
         usaCompleted={usaTotal}
         usaProjected={usaProjected}
         pointsToWin={pointsToWin}
+        totalPoints={totalPoints}
       />
 
       <div className="flex items-center justify-center gap-2 border-t bg-muted/40 py-1.5 text-xs text-muted-foreground">
@@ -80,14 +81,16 @@ function ProgressBar({
   usaCompleted,
   usaProjected,
   pointsToWin,
+  totalPoints,
 }: {
   europeCompleted: number;
   europeProjected: number;
   usaCompleted: number;
   usaProjected: number;
   pointsToWin: number;
+  totalPoints: number;
 }) {
-  const total = TOTAL_POINTS;
+  const total = totalPoints;
   const euCompPct = (europeCompleted / total) * 100;
   const euProjPct = (europeProjected / total) * 100;
   const usaCompPct = (usaCompleted / total) * 100;

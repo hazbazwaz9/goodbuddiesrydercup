@@ -21,6 +21,15 @@ export interface MatchView {
   status: MatchStatus;
 }
 
+export type ContestType = "long_drive" | "closest_pin";
+
+/** Result of a per-session side contest (Long Drive / Closest to the Pin). */
+export interface ContestResult {
+  winnerPlayerId: string | null;
+  winnerName: string | null;
+  winnerTeam: Team | null;
+}
+
 export interface SessionView {
   id: number;
   sessionNumber: number;
@@ -28,6 +37,11 @@ export interface SessionView {
   format: MatchFormat;
   isActive: boolean;
   matches: MatchView[];
+  /** Side contests, each worth half a point to the winner's team. */
+  contests: {
+    longDrive: ContestResult;
+    closestPin: ContestResult;
+  };
 }
 
 /** Gross scores for a single hole (null = not yet entered). */
@@ -47,6 +61,8 @@ export interface TournamentView {
   europeProjected: number;
   usaProjected: number;
   pointsToWin: number;
+  /** Total points available across all matches + side contests. */
+  totalPoints: number;
   winner: Team | null;
   configured: boolean;
 }
