@@ -95,9 +95,9 @@ begin
   v_complete := (v_played = v_total) or (v_lead > v_remaining);
 
   update public.matches set
-    status = case when v_complete then 'complete'
+    status = (case when v_complete then 'complete'
                   when v_played > 0 then 'active'
-                  else 'pending' end,
+                  else 'pending' end)::match_status,
     europe_points = case when v_complete then (case when v_diff > 0 then 1 when v_diff = 0 then 0.5 else 0 end) else 0 end,
     usa_points    = case when v_complete then (case when v_diff < 0 then 1 when v_diff = 0 then 0.5 else 0 end) else 0 end
   where id = p_match_id;
