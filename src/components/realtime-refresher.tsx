@@ -14,6 +14,9 @@ export function RealtimeRefresher() {
   const router = useRouter();
 
   useEffect(() => {
+    // Always refresh server data immediately on page visit (busts the RSC client cache).
+    router.refresh();
+
     if (!isSupabaseConfigured) return;
     const supabase = createSupabaseBrowserClient();
 
@@ -27,7 +30,8 @@ export function RealtimeRefresher() {
       )
       .subscribe();
 
-    const interval = setInterval(() => router.refresh(), 20_000);
+    // Fallback poll every 10 s in case the realtime socket drops on spotty signal.
+    const interval = setInterval(() => router.refresh(), 10_000);
 
     return () => {
       clearInterval(interval);
