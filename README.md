@@ -1,36 +1,73 @@
-This is a [Next.js](https://nextjs.org) project bootstrapped with [`create-next-app`](https://nextjs.org/docs/app/api-reference/cli/create-next-app).
+# Good Buddies Ryder Cup (GBRC) 🏆
 
-## Getting Started
+Live mobile scoring for the annual Good Buddies Ryder Cup — Europe vs USA, two teams of eight, three 18-hole sessions (Best Ball, Scramble, Singles).
 
-First, run the development server:
+- **Live leaderboard** (public) that updates in real time as holes are scored
+- **Open hole-by-hole scoring** — no login; anyone in the group taps in results, with optimistic updates + an offline queue for spotty course signal
+- **Roster** showing both teams and handicaps
+- **Admin panel** (behind a shared passcode) to draft teams, set pairings, and manage handicaps
+- Installable as a **PWA** ("Add to Home Screen")
 
-```bash
-npm run dev
-# or
-yarn dev
-# or
-pnpm dev
-# or
-bun dev
+## Stack
+
+Next.js (App Router) · Supabase (Postgres + Realtime) · Drizzle · Tailwind + shadcn/ui · TypeScript. Deploys to Vercel. **No user accounts** — the app is open for viewing and scoring; admin actions are gated by a passcode and run via the Supabase service role.
+
+## Setup
+
+### 1. Supabase project
+1. Create a project at [supabase.com](https://supabase.com).
+2. In **SQL editor**, paste and run the contents of [`supabase/schema.sql`](supabase/schema.sql). It creates all tables, RLS, the realtime triggers, and the static course/session data. (Safe to re-run — it tears down and rebuilds.)
+
+### 2. Environment
+Copy `.env.example` to `.env.local` and fill in:
+
+```
+NEXT_PUBLIC_SUPABASE_URL=...        # Project Settings → API → Project URL
+NEXT_PUBLIC_SUPABASE_ANON_KEY=...   # Project Settings → API → anon public key
+SUPABASE_SERVICE_ROLE_KEY=...       # Project Settings → API → service_role (admin writes + seed)
+DATABASE_URL=...                    # Project Settings → Database → URI (seed only)
+ADMIN_PASSCODE=pick-something       # unlocks the in-app Admin panel
 ```
 
-Open [http://localhost:3000](http://localhost:3000) with your browser to see the result.
+The anon URL/key are enough for the public app and scoring. The **service role key** is required for the Admin panel to write players/teams/matches.
 
-You can start editing the page by modifying `app/page.tsx`. The page auto-updates as you edit the file.
+### 3. Add players
+Either seed 16 placeholders:
+```bash
+npm install
+npm run db:seed
+```
+…or just add them in the app: open `/admin`, enter your `ADMIN_PASSCODE`, and add players / draft teams / set pairings there.
 
-This project uses [`next/font`](https://nextjs.org/docs/app/building-your-application/optimizing/fonts) to automatically optimize and load [Geist](https://vercel.com/font), a new font family for Vercel.
+### 4. Run
+```bash
+npm run dev         # http://localhost:3000
+```
 
-## Learn More
+## How it works
+- **Players** open the app, go to a match, and tap **Europe / ½ / USA** for each hole. The leaderboard updates live on everyone's phone. No login.
+- **You (admin)** tap the gear icon (top-right) → enter the passcode → manage everything. The passcode is stored in an httpOnly cookie; admin writes only succeed with the service role key on the server.
 
-To learn more about Next.js, take a look at the following resources:
+## Deploy (Vercel)
+1. Push to GitHub, import the repo in Vercel.
+2. Add the same env vars in **Project Settings → Environment Variables**.
 
-- [Next.js Documentation](https://nextjs.org/docs) - learn about Next.js features and API.
-- [Learn Next.js](https://nextjs.org/learn) - an interactive Next.js tutorial.
+## Before the tournament ⛳️
+- **Stroke index:** `supabase/schema.sql` seeds a placeholder stroke index (`stroke_index = hole_number`). Replace it with the real course stroke index and par.
 
-You can check out [the Next.js GitHub repository](https://github.com/vercel/next.js) - your feedback and contributions are welcome!
+## Handicap rules
+| Session | Format | Handicap |
+|---------|--------|----------|
+| 1 | Best Ball 2v2 | Full handicap per player |
+| 2 | Scramble 2v2 | 25% of combined team handicap |
+| 3 | Singles 1v1 | Full handicap difference |
 
-## Deploy on Vercel
+Points: 1 win / ½ halve / 0 loss. First team to 8.5 of 16 wins. Scoring math lives in [`src/lib/golf.ts`](src/lib/golf.ts) (unit-tested in `golf.test.ts`).
 
-The easiest way to deploy your Next.js app is to use the [Vercel Platform](https://vercel.com/new?utm_medium=default-template&filter=next.js&utm_source=create-next-app&utm_campaign=create-next-app-readme) from the creators of Next.js.
-
-Check out our [Next.js deployment documentation](https://nextjs.org/docs/app/building-your-application/deploying) for more details.
+## Scripts
+```bash
+npm run dev        # dev server
+npm run build      # production build
+npm test           # golf logic unit tests
+npm run db:seed    # seed 16 placeholder players
+```
