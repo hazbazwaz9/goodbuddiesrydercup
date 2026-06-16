@@ -24,7 +24,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
-import { Trash2, Plus, Lock } from "lucide-react";
+import { Trash2, Plus, Lock, RotateCcw } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { TEAM_LABEL } from "@/lib/brand";
 import type { PlayerLite, SessionView, Team } from "@/lib/types";
@@ -34,6 +34,7 @@ import {
   deleteMatch,
   deletePlayer,
   lockAdmin,
+  resetMatchScores,
   setSessionActive,
   updatePlayer,
   type ActionResult,
@@ -86,6 +87,7 @@ export function AdminClient({
         {sessions.map((s) => (
           <SessionBlock key={s.id} session={s} players={players} />
         ))}
+        <ResetScoresButton />
       </TabsContent>
     </Tabs>
   );
@@ -400,6 +402,45 @@ function AddMatchForm({ session, players }: { session: SessionView; players: Pla
         <Plus className="mr-1 h-4 w-4" /> Add match
       </Button>
     </div>
+  );
+}
+
+/* ----------------------------- Reset scores ----------------------------- */
+
+function ResetScoresButton() {
+  const [open, setOpen] = useState(false);
+  const { pending, run } = useAction();
+
+  function confirm() {
+    run(async () => {
+      const res = await resetMatchScores();
+      if (res.ok) setOpen(false);
+      return res;
+    }, "All scores reset");
+  }
+
+  return (
+    <Dialog open={open} onOpenChange={setOpen}>
+      <DialogTrigger render={<Button variant="outline" className="w-full text-destructive border-destructive/40 hover:bg-destructive/5" />}>
+        <RotateCcw className="mr-1 h-4 w-4" /> Reset all scores
+      </DialogTrigger>
+      <DialogContent>
+        <DialogHeader>
+          <DialogTitle>Reset all match scores?</DialogTitle>
+        </DialogHeader>
+        <p className="text-sm text-muted-foreground">
+          This will permanently delete every hole result across all matches. Match statuses will return to "Not started". This cannot be undone.
+        </p>
+        <DialogFooter>
+          <Button variant="ghost" onClick={() => setOpen(false)} disabled={pending}>
+            Cancel
+          </Button>
+          <Button variant="destructive" onClick={confirm} disabled={pending}>
+            Yes, reset scores
+          </Button>
+        </DialogFooter>
+      </DialogContent>
+    </Dialog>
   );
 }
 
