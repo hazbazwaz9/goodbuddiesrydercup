@@ -146,12 +146,20 @@ export async function deleteMatch(matchId: number): Promise<ActionResult> {
   return { ok: true };
 }
 
-/** Wipe all hole results across every match (scores + winners reset to zero). */
+/**
+ * Wipe all hole results across every match (scores + winners reset to zero) and
+ * clear the side contests (Long Drive, Closest to the Pin).
+ */
 export async function resetMatchScores(): Promise<ActionResult> {
   const a = await requireAdmin();
   if ("error" in a) return { ok: false, error: a.error };
   const { error } = await a.admin.from("hole_results").delete().neq("id", 0);
   if (error) return { ok: false, error: error.message };
+  const { error: contestError } = await a.admin
+    .from("session_contests")
+    .delete()
+    .neq("id", 0);
+  if (contestError) return { ok: false, error: contestError.message };
   revalidateAll();
   return { ok: true };
 }

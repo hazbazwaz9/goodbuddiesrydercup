@@ -132,6 +132,49 @@ export function singlesAllocation(
   return allocateDifference(europeHandicap, usaHandicap, holes);
 }
 
+/**
+ * Human golf name for a gross score on a hole of the given par.
+ * A score of 1 is always "Hole in One"; otherwise the name comes from the
+ * score relative to par (Eagle, Birdie, Par, Bogey, …).
+ */
+export function golfScoreName(score: number, par: number): string {
+  if (score === 1) return "Hole in One";
+  const diff = score - par;
+  switch (diff) {
+    case -3:
+      return "Albatross";
+    case -2:
+      return "Eagle";
+    case -1:
+      return "Birdie";
+    case 0:
+      return "Par";
+    case 1:
+      return "Bogey";
+    case 2:
+      return "Double Bogey";
+    case 3:
+      return "Triple Bogey";
+    case 4:
+      return "Quadruple Bogey";
+    default:
+      return diff < 0 ? `${diff} under` : `+${diff}`;
+  }
+}
+
+/**
+ * Selectable gross-score options for a hole, each labelled with its golf name.
+ * Ranges from 1 (Hole in One) up to par + 5.
+ */
+export function scoreOptions(par: number): { score: number; name: string }[] {
+  const max = par + 5;
+  const opts: { score: number; name: string }[] = [];
+  for (let score = 1; score <= max; score++) {
+    opts.push({ score, name: golfScoreName(score, par) });
+  }
+  return opts;
+}
+
 export interface MatchStatus {
   europeHolesWon: number;
   usaHolesWon: number;

@@ -4,6 +4,8 @@ import {
   scrambleAllocation,
   singlesAllocation,
   computeMatchStatus,
+  golfScoreName,
+  scoreOptions,
   type CourseHole,
   type HoleWinner,
 } from "./golf";
@@ -138,5 +140,38 @@ describe("computeMatchStatus", () => {
     expect(s.isComplete).toBe(true);
     expect(s.statusText).toBe("Match Halved");
     expect(s.points).toEqual({ europe: 0.5, usa: 0.5 });
+  });
+});
+
+describe("golfScoreName", () => {
+  it("names scores on a par 4 like the spec", () => {
+    expect(golfScoreName(1, 4)).toBe("Hole in One");
+    expect(golfScoreName(2, 4)).toBe("Eagle");
+    expect(golfScoreName(3, 4)).toBe("Birdie");
+    expect(golfScoreName(4, 4)).toBe("Par");
+    expect(golfScoreName(5, 4)).toBe("Bogey");
+    expect(golfScoreName(6, 4)).toBe("Double Bogey");
+    expect(golfScoreName(7, 4)).toBe("Triple Bogey");
+  });
+
+  it("adjusts the names to the hole's par", () => {
+    expect(golfScoreName(3, 3)).toBe("Par");
+    expect(golfScoreName(2, 3)).toBe("Birdie");
+    expect(golfScoreName(5, 5)).toBe("Par");
+    expect(golfScoreName(2, 5)).toBe("Albatross");
+  });
+
+  it("always calls a 1 a Hole in One", () => {
+    expect(golfScoreName(1, 3)).toBe("Hole in One");
+    expect(golfScoreName(1, 5)).toBe("Hole in One");
+  });
+});
+
+describe("scoreOptions", () => {
+  it("offers 1..par+5 with names", () => {
+    const opts = scoreOptions(4);
+    expect(opts[0]).toEqual({ score: 1, name: "Hole in One" });
+    expect(opts.at(-1)?.score).toBe(9);
+    expect(opts.find((o) => o.score === 4)?.name).toBe("Par");
   });
 });

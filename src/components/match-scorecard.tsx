@@ -1,10 +1,17 @@
 "use client";
 
 import { useMemo } from "react";
-import { computeMatchStatus, type CourseHole, type HoleWinner } from "@/lib/golf";
+import { computeMatchStatus, scoreOptions, type CourseHole, type HoleWinner } from "@/lib/golf";
 import { useMatchSync } from "@/lib/use-match-sync";
 import { cn } from "@/lib/utils";
 import { Card, CardContent } from "@/components/ui/card";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
 import { Cloud, CloudOff, Check } from "lucide-react";
 import type { HoleScore, PlayerLite } from "@/lib/types";
 import type { MatchFormat } from "@/lib/golf";
@@ -224,6 +231,7 @@ function HoleRow({
           <PlayerScoreInput
             label={format === "singles" ? europePlayers[0]?.name ?? "Europe" : "Europe"}
             team="europe"
+            par={hole.par}
             strokes={euPlayerStrokes[0] ?? 0}
             value={euScores[0] ?? null}
             onChange={(v) => onSetScore("eu", 0, v)}
@@ -231,6 +239,7 @@ function HoleRow({
           <PlayerScoreInput
             label={format === "singles" ? usaPlayers[0]?.name ?? "USA" : "USA"}
             team="usa"
+            par={hole.par}
             strokes={usaPlayerStrokes[0] ?? 0}
             value={usaScores[0] ?? null}
             onChange={(v) => onSetScore("usa", 0, v)}
@@ -245,6 +254,7 @@ function HoleRow({
                 key={p.id}
                 label={p.name}
                 team="europe"
+                par={hole.par}
                 strokes={euPlayerStrokes[pi] ?? 0}
                 value={euScores[pi] ?? null}
                 onChange={(v) => onSetScore("eu", pi, v)}
@@ -257,6 +267,7 @@ function HoleRow({
                 key={p.id}
                 label={p.name}
                 team="usa"
+                par={hole.par}
                 strokes={usaPlayerStrokes[pi] ?? 0}
                 value={usaScores[pi] ?? null}
                 onChange={(v) => onSetScore("usa", pi, v)}
@@ -272,22 +283,25 @@ function HoleRow({
 function PlayerScoreInput({
   label,
   team,
+  par,
   strokes,
   value,
   onChange,
 }: {
   label: string;
   team: "europe" | "usa";
+  par: number;
   strokes: number;
   value: number | null;
   onChange: (v: number | null) => void;
 }) {
   const hasStroke = strokes > 0;
+  const options = useMemo(() => scoreOptions(par), [par]);
 
   return (
     <div
       className={cn(
-        "flex items-center justify-between rounded-lg border px-2 py-1.5 transition-colors",
+        "flex items-center justify-between gap-2 rounded-lg border px-2 py-1.5 transition-colors",
         hasStroke && team === "europe" && "border-europe/40 bg-europe/5",
         hasStroke && team === "usa" && "border-usa/40 bg-usa/5",
         !hasStroke && "border-border bg-transparent",
@@ -306,40 +320,32 @@ function PlayerScoreInput({
           </p>
         )}
       </div>
-      <div className="ml-2 flex items-center gap-0.5">
-        <button
-          type="button"
-          onClick={() => onChange(value != null ? Math.max(1, value - 1) : null)}
-          disabled={value == null}
-          className="flex h-6 w-6 items-center justify-center rounded text-muted-foreground hover:bg-muted disabled:opacity-30"
-          aria-label="Decrease"
-        >
-          −
-        </button>
-        <button
-          type="button"
-          onClick={() => onChange(value != null ? value : 4)}
-          className={cn(
-            "min-w-[2rem] rounded px-1 py-0.5 text-center font-mono text-sm font-bold tabular-nums",
-            value != null
-              ? team === "europe"
-                ? "bg-europe text-europe-foreground"
-                : "bg-usa text-usa-foreground"
-              : "bg-muted text-muted-foreground",
-          )}
+      <Select
+        value={value != null ? String(value) : "none"}
+        onValueChange={(v) => onChange(v == null || v === "none" ? null : Number(v))}
+      >
+        <SelectTrigger
           aria-label="Score"
+          className={cn(
+            "h-8 min-w-[3.5rem] justify-center px-2 font-mono text-sm font-bold tabular-nums",
+            value != null &&
+              (team === "europe"
+                ? "border-europe bg-europe text-europe-foreground"
+                : "border-usa bg-usa text-usa-foreground"),
+          )}
         >
-          {value ?? "—"}
-        </button>
-        <button
-          type="button"
-          onClick={() => onChange(value != null ? value + 1 : 4)}
-          className="flex h-6 w-6 items-center justify-center rounded text-muted-foreground hover:bg-muted"
-          aria-label="Increase"
-        >
-          +
-        </button>
-      </div>
+          <SelectValue>{(v) => (v == null || v === "none" ? "—" : String(v))}</SelectValue>
+        </SelectTrigger>
+        <SelectContent className="max-h-72">
+          <SelectItem value="none">— Clear</SelectItem>
+          {options.map((o) => (
+            <SelectItem key={o.score} value={String(o.score)}>
+              <span className="font-mono font-bold tabular-nums">{o.score}</span>
+              <span className="text-muted-foreground">({o.name})</span>
+            </SelectItem>
+          ))}
+        </SelectContent>
+      </Select>
     </div>
   );
 }
