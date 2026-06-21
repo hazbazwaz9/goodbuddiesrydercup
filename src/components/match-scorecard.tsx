@@ -1,10 +1,18 @@
 "use client";
 
-import { useMemo } from "react";
-import { computeMatchStatus, scoreOptions, scoreEmoji, type CourseHole, type HoleWinner } from "@/lib/golf";
+import { useEffect, useMemo, useRef, useState } from "react";
+import {
+  computeMatchStatus,
+  golfScoreName,
+  scoreOptions,
+  scoreEmoji,
+  type CourseHole,
+  type HoleWinner,
+} from "@/lib/golf";
 import { useMatchSync } from "@/lib/use-match-sync";
 import { cn } from "@/lib/utils";
 import { Card, CardContent } from "@/components/ui/card";
+import { Button } from "@/components/ui/button";
 import {
   Select,
   SelectContent,
@@ -12,7 +20,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
-import { Cloud, CloudOff, Check } from "lucide-react";
+import { Cloud, CloudOff, Check, Pencil } from "lucide-react";
 import type { HoleScore, PlayerLite } from "@/lib/types";
 import type { MatchFormat } from "@/lib/golf";
 
@@ -50,6 +58,20 @@ export function MatchScorecard(props: ScorecardProps) {
   );
 
   const status = useMemo(() => computeMatchStatus(winners), [winners]);
+
+  // Auto-scroll to next incomplete hole when a hole is completed
+  const holeRefs = useRef<(HTMLLIElement | null)[]>([]);
+  const prevCompleteCount = useRef(winners.filter((w) => w !== null).length);
+  useEffect(() => {
+    const completeCount = winners.filter((w) => w !== null).length;
+    if (completeCount > prevCompleteCount.current) {
+      const nextIdx = winners.findIndex((w) => w === null);
+      if (nextIdx !== -1) {
+        holeRefs.current[nextIdx]?.scrollIntoView({ behavior: "smooth", block: "start" });
+      }
+    }
+    prevCompleteCount.current = completeCount;
+  }, [winners]);
 
   return (
     <div className="space-y-4">
@@ -93,7 +115,6 @@ export function MatchScorecard(props: ScorecardProps) {
           </div>
           <ul className="divide-y">
             {props.holes.map((hole, i) => {
-              // Best ball: individual player strokes. Singles/scramble: team-level allocation.
               const isBestBall = props.format === "best_ball";
               const euPlayerStrokes = isBestBall
                 ? props.playerStrokes.europe.map((ps) => ps[i] ?? 0)
@@ -105,6 +126,7 @@ export function MatchScorecard(props: ScorecardProps) {
               return (
                 <HoleRow
                   key={hole.holeNumber}
+                  liRef={(el) => { holeRefs.current[i] = el; }}
                   hole={hole}
                   format={props.format}
                   europePlayers={props.europePlayers}
@@ -176,7 +198,32 @@ function TeamHeading({
   );
 }
 
+function holeSummaryText(
+  hole: CourseHole,
+  format: MatchFormat,
+  winner: HoleWinner,
+  euScores: (number | null)[],
+  usaScores: (number | null)[],
+): string {
+  if (!winner) return "";
+  if (winner === "halved") {
+    const score = euScores[0] ?? usaScores[0];
+    const name = score != null ? ` with a ${score} (${golfScoreName(score, hole.par)})` : "";
+    return `Hole ${hole.holeNumber} halved${name}`;
+  }
+  const isBestBall = format === "best_ball";
+  const teamLabel = winner === "europe" ? "EU" : "USA";
+  const scores = winner === "europe" ? euScores : usaScores;
+  if (isBestBall) {
+    return `${teamLabel} won hole ${hole.holeNumber}`;
+  }
+  const score = scores[0];
+  const name = score != null ? ` with a ${score} (${golfScoreName(score, hole.par)})` : "";
+  return `${teamLabel} won hole ${hole.holeNumber}${name}`;
+}
+
 function HoleRow({
+  liRef,
   hole,
   format,
   europePlayers,
@@ -188,6 +235,7 @@ function HoleRow({
   winner,
   onSetScore,
 }: {
+  liRef: (el: HTMLLIElement | null) => void;
   hole: CourseHole;
   format: MatchFormat;
   europePlayers: PlayerLite[];
@@ -201,8 +249,21 @@ function HoleRow({
 }) {
   const isSinglesOrScramble = format === "singles" || format === "scramble";
 
+  // Start collapsed if already has a winner (e.g. loading in-progress match)
+  const [expanded, setExpanded] = useState(winner === null);
+  const prevWinner = useRef(winner);
+  useEffect(() => {
+    if (prevWinner.current === null && winner !== null) {
+      setExpanded(false);
+    }
+    prevWinner.current = winner;
+  }, [winner]);
+
+  const summaryText = holeSummaryText(hole, format, winner, euScores, usaScores);
+  const showInputs = winner === null || expanded;
+
   return (
-    <li className="px-3 py-2.5">
+    <li ref={liRef} className="px-3 py-2.5">
       {/* Hole info row */}
       <div className="mb-2 flex items-center gap-2">
         <span className="flex h-7 w-7 items-center justify-center rounded-full bg-muted text-sm font-bold">
@@ -225,56 +286,110 @@ function HoleRow({
         )}
       </div>
 
-      {/* Score inputs */}
-      {isSinglesOrScramble ? (
-        <div className="grid grid-cols-[1fr_1fr] gap-2">
-          <PlayerScoreInput
-            label={format === "singles" ? europePlayers[0]?.name ?? "Europe" : "Europe"}
-            team="europe"
-            par={hole.par}
-            strokes={euPlayerStrokes[0] ?? 0}
-            value={euScores[0] ?? null}
-            onChange={(v) => onSetScore("eu", 0, v)}
-          />
-          <PlayerScoreInput
-            label={format === "singles" ? usaPlayers[0]?.name ?? "USA" : "USA"}
-            team="usa"
-            par={hole.par}
-            strokes={usaPlayerStrokes[0] ?? 0}
-            value={usaScores[0] ?? null}
-            onChange={(v) => onSetScore("usa", 0, v)}
-          />
+      {!showInputs ? (
+        /* Roll-up summary */
+        <div
+          className={cn(
+            "flex items-center justify-between rounded-lg px-3 py-2",
+            winner === "europe" && "bg-europe/10 ring-1 ring-europe/20",
+            winner === "usa" && "bg-usa/10 ring-1 ring-usa/20",
+            winner === "halved" && "bg-muted",
+          )}
+        >
+          <p
+            className={cn(
+              "text-sm font-medium",
+              winner === "europe" && "text-europe",
+              winner === "usa" && "text-usa",
+            )}
+          >
+            {summaryText}
+          </p>
+          <Button
+            size="sm"
+            variant="ghost"
+            className="ml-2 h-7 px-2 text-xs"
+            onClick={() => setExpanded(true)}
+          >
+            <Pencil className="mr-1 h-3 w-3" /> Edit
+          </Button>
         </div>
       ) : (
-        /* Best ball: 2 players per side */
-        <div className="grid grid-cols-2 gap-2">
-          <div className="space-y-1.5">
-            {europePlayers.map((p, pi) => (
+        /* Score inputs */
+        isSinglesOrScramble ? (
+          <div className="grid grid-cols-[1fr_1fr] gap-2">
+            <div
+              className={cn(
+                "rounded-lg p-0.5",
+                winner === "europe" && "bg-europe/10 ring-1 ring-europe/30",
+              )}
+            >
               <PlayerScoreInput
-                key={p.id}
-                label={p.name}
+                label={format === "singles" ? europePlayers[0]?.name ?? "Europe" : "Europe"}
                 team="europe"
                 par={hole.par}
-                strokes={euPlayerStrokes[pi] ?? 0}
-                value={euScores[pi] ?? null}
-                onChange={(v) => onSetScore("eu", pi, v)}
+                strokes={euPlayerStrokes[0] ?? 0}
+                value={euScores[0] ?? null}
+                onChange={(v) => onSetScore("eu", 0, v)}
               />
-            ))}
-          </div>
-          <div className="space-y-1.5">
-            {usaPlayers.map((p, pi) => (
+            </div>
+            <div
+              className={cn(
+                "rounded-lg p-0.5",
+                winner === "usa" && "bg-usa/10 ring-1 ring-usa/30",
+              )}
+            >
               <PlayerScoreInput
-                key={p.id}
-                label={p.name}
+                label={format === "singles" ? usaPlayers[0]?.name ?? "USA" : "USA"}
                 team="usa"
                 par={hole.par}
-                strokes={usaPlayerStrokes[pi] ?? 0}
-                value={usaScores[pi] ?? null}
-                onChange={(v) => onSetScore("usa", pi, v)}
+                strokes={usaPlayerStrokes[0] ?? 0}
+                value={usaScores[0] ?? null}
+                onChange={(v) => onSetScore("usa", 0, v)}
               />
-            ))}
+            </div>
           </div>
-        </div>
+        ) : (
+          /* Best ball: 2 players per side */
+          <div className="grid grid-cols-2 gap-2">
+            <div
+              className={cn(
+                "space-y-1.5 rounded-lg p-0.5",
+                winner === "europe" && "bg-europe/10 ring-1 ring-europe/30",
+              )}
+            >
+              {europePlayers.map((p, pi) => (
+                <PlayerScoreInput
+                  key={p.id}
+                  label={p.name}
+                  team="europe"
+                  par={hole.par}
+                  strokes={euPlayerStrokes[pi] ?? 0}
+                  value={euScores[pi] ?? null}
+                  onChange={(v) => onSetScore("eu", pi, v)}
+                />
+              ))}
+            </div>
+            <div
+              className={cn(
+                "space-y-1.5 rounded-lg p-0.5",
+                winner === "usa" && "bg-usa/10 ring-1 ring-usa/30",
+              )}
+            >
+              {usaPlayers.map((p, pi) => (
+                <PlayerScoreInput
+                  key={p.id}
+                  label={p.name}
+                  team="usa"
+                  par={hole.par}
+                  strokes={usaPlayerStrokes[pi] ?? 0}
+                  value={usaScores[pi] ?? null}
+                  onChange={(v) => onSetScore("usa", pi, v)}
+                />
+              ))}
+            </div>
+          </div>
+        )
       )}
     </li>
   );
@@ -335,7 +450,7 @@ function PlayerScoreInput({
           )}
         >
           <SelectValue>
-            {value == null ? "—" : `${value}${scoreEmoji(value, par)}`}
+            {value == null ? "—" : String(value)}
           </SelectValue>
         </SelectTrigger>
         <SelectContent className="max-h-72">
