@@ -167,7 +167,7 @@ export function golfScoreName(score: number, par: number): string {
  * Ranges from 1 (Hole in One) up to par + 5.
  */
 export function scoreOptions(par: number): { score: number; name: string }[] {
-  const max = par + 5;
+  const max = par + 3;
   const opts: { score: number; name: string }[] = [];
   for (let score = 1; score <= max; score++) {
     opts.push({ score, name: golfScoreName(score, par) });
