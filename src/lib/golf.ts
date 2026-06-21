@@ -10,7 +10,7 @@
 
 export type Team = "europe" | "usa";
 export type HoleWinner = Team | "halved" | null;
-export type MatchFormat = "best_ball" | "scramble" | "singles";
+export type MatchFormat = "shamble" | "scramble" | "singles";
 
 export interface CourseHole {
   holeNumber: number; // 1..18
@@ -33,14 +33,14 @@ export function strokesForHandicap(handicap: number, holes: CourseHole[]): numbe
 }
 
 /**
- * Best Ball (2v2), full handicap: every player plays off their own full handicap.
+ * Shamble (2v2): each player plays their own ball at 50% of their handicap.
  * Returns each player's strokes-per-hole array, in the same order as `players`.
  */
-export function bestBallStrokes(
+export function shambleStrokes(
   players: { handicap: number }[],
   holes: CourseHole[],
 ): number[][] {
-  return players.map((p) => strokesForHandicap(p.handicap, holes));
+  return players.map((p) => strokesForHandicap(Math.round(p.handicap * 0.5), holes));
 }
 
 export interface TeamAllocation {
@@ -96,7 +96,7 @@ export function scrambleAllocation(
 
 /**
  * Advisory strokes each team receives per hole, by format — for the scorecard.
- * Best Ball: count of teammates getting a stroke that hole (0..2).
+ * Shamble: count of teammates getting a stroke that hole (0..2), at 50% handicap.
  * Scramble / Singles: the receiving team's allocated strokes (0/1 per hole).
  */
 export function teamStrokesPerHole(
@@ -105,9 +105,9 @@ export function teamStrokesPerHole(
   usaHandicaps: number[],
   holes: CourseHole[],
 ): { europe: number[]; usa: number[] } {
-  if (format === "best_ball") {
-    const eu = europeHandicaps.map((h) => strokesForHandicap(h, holes));
-    const usa = usaHandicaps.map((h) => strokesForHandicap(h, holes));
+  if (format === "shamble") {
+    const eu = europeHandicaps.map((h) => strokesForHandicap(Math.round(h * 0.5), holes));
+    const usa = usaHandicaps.map((h) => strokesForHandicap(Math.round(h * 0.5), holes));
     return {
       europe: holes.map((_, i) => eu.reduce((s, a) => s + (a[i] > 0 ? 1 : 0), 0)),
       usa: holes.map((_, i) => usa.reduce((s, a) => s + (a[i] > 0 ? 1 : 0), 0)),
@@ -214,12 +214,12 @@ export function computeHoleWinner(
 ): HoleWinner {
   const holeArr = [hole];
 
-  if (format === "best_ball") {
+  if (format === "shamble") {
     const euNets = euGross.map((g, i) =>
-      g != null ? g - strokesForHandicap(euHcps[i] ?? 0, holeArr)[0] : Infinity,
+      g != null ? g - strokesForHandicap(Math.round((euHcps[i] ?? 0) * 0.5), holeArr)[0] : Infinity,
     );
     const usaNets = usaGross.map((g, i) =>
-      g != null ? g - strokesForHandicap(usaHcps[i] ?? 0, holeArr)[0] : Infinity,
+      g != null ? g - strokesForHandicap(Math.round((usaHcps[i] ?? 0) * 0.5), holeArr)[0] : Infinity,
     );
     const bestEu = Math.min(...euNets);
     const bestUsa = Math.min(...usaNets);

@@ -25,7 +25,7 @@ import type { HoleScore, PlayerLite } from "@/lib/types";
 import type { MatchFormat } from "@/lib/golf";
 
 const FORMAT_LABEL: Record<string, string> = {
-  best_ball: "Best Ball · 2v2 · full handicap",
+  shamble: "Shamble · 2v2 · 50% handicap",
   scramble: "Scramble · 2v2 · 25% combined",
   singles: "Singles · 1v1 · full handicap",
 };
@@ -59,19 +59,7 @@ export function MatchScorecard(props: ScorecardProps) {
 
   const status = useMemo(() => computeMatchStatus(winners), [winners]);
 
-  // Auto-scroll to next incomplete hole when a hole is completed
   const holeRefs = useRef<(HTMLLIElement | null)[]>([]);
-  const prevCompleteCount = useRef(winners.filter((w) => w !== null).length);
-  useEffect(() => {
-    const completeCount = winners.filter((w) => w !== null).length;
-    if (completeCount > prevCompleteCount.current) {
-      const nextIdx = winners.findIndex((w) => w === null);
-      if (nextIdx !== -1) {
-        holeRefs.current[nextIdx]?.scrollIntoView({ behavior: "smooth", block: "start" });
-      }
-    }
-    prevCompleteCount.current = completeCount;
-  }, [winners]);
 
   return (
     <div className="space-y-4">
@@ -115,11 +103,11 @@ export function MatchScorecard(props: ScorecardProps) {
           </div>
           <ul className="divide-y">
             {props.holes.map((hole, i) => {
-              const isBestBall = props.format === "best_ball";
-              const euPlayerStrokes = isBestBall
+              const isShamble = props.format === "shamble";
+              const euPlayerStrokes = isShamble
                 ? props.playerStrokes.europe.map((ps) => ps[i] ?? 0)
                 : [props.teamStrokes.europe[i] ?? 0];
-              const usaPlayerStrokes = isBestBall
+              const usaPlayerStrokes = isShamble
                 ? props.playerStrokes.usa.map((ps) => ps[i] ?? 0)
                 : [props.teamStrokes.usa[i] ?? 0];
 
@@ -211,10 +199,9 @@ function holeSummaryText(
     const name = score != null ? ` with a ${score} (${golfScoreName(score, hole.par)})` : "";
     return `Hole ${hole.holeNumber} halved${name}`;
   }
-  const isBestBall = format === "best_ball";
   const teamLabel = winner === "europe" ? "EU" : "USA";
   const scores = winner === "europe" ? euScores : usaScores;
-  if (isBestBall) {
+  if (format === "shamble") {
     return `${teamLabel} won hole ${hole.holeNumber}`;
   }
   const score = scores[0];
@@ -247,6 +234,7 @@ function HoleRow({
   winner: HoleWinner;
   onSetScore: (side: "eu" | "usa", playerIdx: number, score: number | null) => void;
 }) {
+  const isShamble = format === "shamble";
   const isSinglesOrScramble = format === "singles" || format === "scramble";
 
   // Start collapsed if already has a winner (e.g. loading in-progress match)
@@ -316,7 +304,7 @@ function HoleRow({
         </div>
       ) : (
         /* Score inputs */
-        isSinglesOrScramble ? (
+        !isShamble ? (
           <div className="grid grid-cols-[1fr_1fr] gap-2">
             <div
               className={cn(
@@ -431,7 +419,7 @@ function PlayerScoreInput({
               team === "europe" ? "text-europe" : "text-usa",
             )}
           >
-            {"▼".repeat(strokes)} stroke{strokes > 1 ? "s" : ""}
+            {strokes} stroke{strokes > 1 ? "s" : ""}
           </p>
         )}
       </div>
