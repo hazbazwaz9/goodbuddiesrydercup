@@ -3,7 +3,7 @@ import { isSupabaseConfigured } from "./supabase/config";
 import {
   computeMatchStatus,
   teamStrokesPerHole,
-  bestBallStrokes,
+  shambleStrokes,
   singlesAllocation,
   scrambleAllocation,
   strokesForHandicap,
@@ -109,7 +109,7 @@ export async function getTournament(): Promise<TournamentView> {
     id: s.id,
     sessionNumber: s.session_number,
     name: s.name,
-    format: s.format as MatchFormat,
+    format: (s.format === "best_ball" ? "shamble" : s.format) as MatchFormat,
     isActive: s.is_active,
     matches: [],
     contests: {
@@ -230,7 +230,7 @@ export async function getStats(): Promise<StatsView> {
   );
 
   const sessionFormat = new Map<number, MatchFormat>(
-    (sessionsRes.data ?? []).map((s) => [s.id, s.format as MatchFormat]),
+    (sessionsRes.data ?? []).map((s) => [s.id, (s.format === "best_ball" ? "shamble" : s.format) as MatchFormat]),
   );
 
   const statMap = new Map<string, PlayerStat>();
@@ -290,8 +290,8 @@ export async function getStats(): Promise<StatsView> {
       const winner = row.winner as HoleWinner;
 
       const processScores = (ids: string[], grossArr: (number | null)[], team: "europe" | "usa") => {
-        // In singles/scramble there's only 1 score for the team; in best_ball one per player.
-        const isTeamScore = format !== "best_ball";
+        // In singles/scramble there's only 1 score for the team; in shamble one per player.
+        const isTeamScore = format !== "shamble";
         ids.forEach((id, idx) => {
           const p = playerById.get(id);
           if (!p) return;
@@ -368,10 +368,15 @@ export async function getMatchDetail(matchId: number): Promise<MatchDetail | nul
 
   const holes = await getCourseHoles();
 
-  // Per-player strokes per hole
+  // Per-player strokes per hole (shamble uses 50% handicap)
+  const hcpFactor = found.format === "shamble" ? 0.5 : 1;
   const playerStrokes = {
-    europe: found.europePlayers.map((p) => strokesForHandicap(p.handicap, holes)),
-    usa: found.usaPlayers.map((p) => strokesForHandicap(p.handicap, holes)),
+    europe: found.europePlayers.map((p) =>
+      strokesForHandicap(Math.round(p.handicap * hcpFactor), holes),
+    ),
+    usa: found.usaPlayers.map((p) =>
+      strokesForHandicap(Math.round(p.handicap * hcpFactor), holes),
+    ),
   };
 
   const teamStrokes = teamStrokesPerHole(

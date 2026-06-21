@@ -7,7 +7,7 @@ import type { SessionView, MatchView } from "@/lib/types";
 import { ChevronRight } from "lucide-react";
 
 const FORMAT_LABEL: Record<string, string> = {
-  best_ball: "Best Ball · 2v2",
+  shamble: "Shamble · 2v2",
   scramble: "Scramble · 2v2",
   singles: "Singles · 1v1",
 };
