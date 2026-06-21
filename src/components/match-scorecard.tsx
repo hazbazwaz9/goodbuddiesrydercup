@@ -1,7 +1,7 @@
 "use client";
 
 import { useMemo } from "react";
-import { computeMatchStatus, scoreOptions, type CourseHole, type HoleWinner } from "@/lib/golf";
+import { computeMatchStatus, scoreOptions, scoreEmoji, type CourseHole, type HoleWinner } from "@/lib/golf";
 import { useMatchSync } from "@/lib/use-match-sync";
 import { cn } from "@/lib/utils";
 import { Card, CardContent } from "@/components/ui/card";
@@ -334,16 +334,22 @@ function PlayerScoreInput({
                 : "border-usa bg-usa text-usa-foreground"),
           )}
         >
-          <SelectValue>{(v) => (v == null || v === "none" ? "—" : String(v))}</SelectValue>
+          <SelectValue>
+            {value == null ? "—" : `${value}${scoreEmoji(value, par)}`}
+          </SelectValue>
         </SelectTrigger>
         <SelectContent className="max-h-72">
           <SelectItem value="none">— Clear</SelectItem>
-          {options.map((o) => (
-            <SelectItem key={o.score} value={String(o.score)}>
-              <span className="font-mono font-bold tabular-nums">{o.score}</span>
-              <span className="text-muted-foreground">({o.name})</span>
-            </SelectItem>
-          ))}
+          {options.map((o) => {
+            const emoji = scoreEmoji(o.score, par);
+            return (
+              <SelectItem key={o.score} value={String(o.score)}>
+                <span className="font-mono font-bold tabular-nums">{o.score}</span>
+                {emoji && <span className="ml-0.5">{emoji}</span>}
+                <span className="text-muted-foreground ml-1">({o.name})</span>
+              </SelectItem>
+            );
+          })}
         </SelectContent>
       </Select>
     </div>

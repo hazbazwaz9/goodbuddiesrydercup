@@ -187,6 +187,137 @@ export async function getTournament(): Promise<TournamentView> {
   };
 }
 
+export interface PlayerStat {
+  playerId: string;
+  name: string;
+  team: string | null;
+  birdies: number;
+  eagles: number;
+  pars: number;
+  holesWon: number;
+  holesLost: number;
+  /** Total match points earned (1 per match win, 0.5 per halve). */
+  points: number;
+  /** Cumulative score vs par across all holes played (lower = better). */
+  scoringDiff: number;
+  holesPlayed: number;
+}
+
+export interface StatsView {
+  players: PlayerStat[];
+  configured: boolean;
+}
+
+export async function getStats(): Promise<StatsView> {
+  if (!isSupabaseConfigured) return { players: [], configured: false };
+
+  const supabase = await createSupabaseServerClient();
+
+  const [playersRes, sessionsRes, matchesRes, holesRes, courseRes] = await Promise.all([
+    supabase.from("players").select("id, name, handicap, team"),
+    supabase.from("golf_sessions").select("id, format"),
+    supabase.from("matches").select("id, session_id, europe_player_ids, usa_player_ids"),
+    supabase.from("hole_results").select("match_id, hole_number, europe_gross, usa_gross, winner"),
+    supabase.from("course_holes").select("hole_number, par").order("hole_number"),
+  ]);
+
+  if (playersRes.error || matchesRes.error || holesRes.error) {
+    return { players: [], configured: false };
+  }
+
+  const parByHole = new Map<number, number>(
+    (courseRes.data ?? []).map((h) => [h.hole_number, h.par]),
+  );
+
+  const sessionFormat = new Map<number, MatchFormat>(
+    (sessionsRes.data ?? []).map((s) => [s.id, s.format as MatchFormat]),
+  );
+
+  const statMap = new Map<string, PlayerStat>();
+  const getOrInit = (p: { id: string; name: string; team: string | null }): PlayerStat => {
+    if (!statMap.has(p.id)) {
+      statMap.set(p.id, {
+        playerId: p.id,
+        name: p.name,
+        team: p.team,
+        birdies: 0,
+        eagles: 0,
+        pars: 0,
+        holesWon: 0,
+        holesLost: 0,
+        points: 0,
+        scoringDiff: 0,
+        holesPlayed: 0,
+      });
+    }
+    return statMap.get(p.id)!;
+  };
+
+  const playerById = new Map(
+    (playersRes.data ?? []).map((p) => [p.id, { id: p.id, name: p.name, team: p.team }]),
+  );
+
+  // Index hole results by match
+  const resultsByMatch = new Map<number, typeof holesRes.data>([]);
+  for (const r of holesRes.data ?? []) {
+    const list = resultsByMatch.get(r.match_id) ?? [];
+    list.push(r);
+    resultsByMatch.set(r.match_id, list);
+  }
+
+  for (const match of matchesRes.data ?? []) {
+    const euIds = match.europe_player_ids as string[];
+    const usaIds = match.usa_player_ids as string[];
+    const format = sessionFormat.get(match.session_id) ?? "singles";
+
+    // Match-level points
+    const holeWinners = buildHoleWinners(resultsByMatch.get(match.id) ?? []);
+    const status = computeMatchStatus(holeWinners);
+
+    for (const id of euIds) {
+      const p = playerById.get(id);
+      if (p) getOrInit(p).points += status.points.europe;
+    }
+    for (const id of usaIds) {
+      const p = playerById.get(id);
+      if (p) getOrInit(p).points += status.points.usa;
+    }
+
+    // Per-hole gross score stats
+    for (const row of resultsByMatch.get(match.id) ?? []) {
+      const par = parByHole.get(row.hole_number);
+      if (par == null) continue;
+      const winner = row.winner as HoleWinner;
+
+      const processScores = (ids: string[], grossArr: (number | null)[], team: "europe" | "usa") => {
+        // In singles/scramble there's only 1 score for the team; in best_ball one per player.
+        const isTeamScore = format !== "best_ball";
+        ids.forEach((id, idx) => {
+          const p = playerById.get(id);
+          if (!p) return;
+          const stat = getOrInit(p);
+          const gross = isTeamScore ? (grossArr[0] ?? null) : (grossArr[idx] ?? null);
+          if (gross != null) {
+            const diff = gross - par;
+            stat.scoringDiff += diff;
+            stat.holesPlayed += 1;
+            if (gross === 1 || diff <= -2) stat.eagles += 1;
+            else if (diff === -1) stat.birdies += 1;
+            else if (diff === 0) stat.pars += 1;
+          }
+          if (winner === team) stat.holesWon += 1;
+          else if (winner != null && winner !== "halved" && winner !== team) stat.holesLost += 1;
+        });
+      };
+
+      processScores(euIds, (row.europe_gross as (number | null)[]) ?? [], "europe");
+      processScores(usaIds, (row.usa_gross as (number | null)[]) ?? [], "usa");
+    }
+  }
+
+  return { players: [...statMap.values()], configured: true };
+}
+
 export async function getCourseHoles(): Promise<CourseHole[]> {
   if (!isSupabaseConfigured) return [];
   const supabase = await createSupabaseServerClient();

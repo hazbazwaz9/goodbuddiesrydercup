@@ -162,9 +162,19 @@ export function golfScoreName(score: number, par: number): string {
   }
 }
 
+/** Returns a fun emoji for a score relative to par, or empty string for par/bogey/worse. */
+export function scoreEmoji(score: number, par: number): string {
+  if (score === 1) return "⛳";
+  const diff = score - par;
+  if (diff <= -3) return "🦅";
+  if (diff === -2) return "🦅";
+  if (diff === -1) return "🐦";
+  return "";
+}
+
 /**
  * Selectable gross-score options for a hole, each labelled with its golf name.
- * Ranges from 1 (Hole in One) up to par + 5.
+ * Ranges from 1 (Hole in One) up to par + 3 (Triple Bogey).
  */
 export function scoreOptions(par: number): { score: number; name: string }[] {
   const max = par + 3;
