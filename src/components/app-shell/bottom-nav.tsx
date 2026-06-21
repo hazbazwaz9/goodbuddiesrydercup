@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import { Trophy, Users, Swords } from "lucide-react";
+import { Trophy, Users, Swords, BarChart2 } from "lucide-react";
 import { cn } from "@/lib/utils";
 
 interface NavItem {
@@ -15,6 +15,7 @@ const items: NavItem[] = [
   { href: "/leaderboard", label: "Live", icon: Trophy },
   { href: "/matches", label: "Matches", icon: Swords },
   { href: "/roster", label: "Roster", icon: Users },
+  { href: "/stats", label: "Stats", icon: BarChart2 },
 ];
 
 export function BottomNav() {
