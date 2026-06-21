@@ -379,6 +379,19 @@ function HoleRow({
           </div>
         )
       )}
+      {/* Done button when editing a hole that already has a winner */}
+      {showInputs && winner !== null && (
+        <div className="mt-2 flex justify-end">
+          <Button
+            size="sm"
+            variant="outline"
+            className="h-7 px-3 text-xs"
+            onClick={() => setExpanded(false)}
+          >
+            <Check className="mr-1 h-3 w-3" /> Done
+          </Button>
+        </div>
+      )}
     </li>
   );
 }
