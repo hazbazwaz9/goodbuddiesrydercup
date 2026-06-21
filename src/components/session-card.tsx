@@ -41,13 +41,23 @@ export function SessionCard({
 }
 
 function MatchRow({ match, linkable }: { match: MatchView; linkable: boolean }) {
+  const euNames = match.europePlayers.map((p) => p.name).join(" & ") || "TBD";
+  const usaNames = match.usaPlayers.map((p) => p.name).join(" & ") || "TBD";
+
   const body = (
-    <div className="flex items-center justify-between gap-3 px-6 py-3">
-      <div className="min-w-0 flex-1 space-y-1 text-sm">
-        <PlayerLine names={match.europePlayers.map((p) => p.name)} team="europe" />
-        <PlayerLine names={match.usaPlayers.map((p) => p.name)} team="usa" />
+    <div className="px-4 py-3 space-y-2">
+      <div className="grid grid-cols-[1fr_auto_1fr] items-start gap-x-2 text-sm">
+        <div className="flex items-start gap-1.5">
+          <span className="mt-1.5 h-2 w-2 shrink-0 rounded-full bg-europe" />
+          <span className="font-medium leading-snug text-europe">{euNames}</span>
+        </div>
+        <span className="mt-0.5 text-xs font-bold text-muted-foreground">vs</span>
+        <div className="flex items-start justify-end gap-1.5">
+          <span className="font-medium leading-snug text-usa text-right">{usaNames}</span>
+          <span className="mt-1.5 h-2 w-2 shrink-0 rounded-full bg-usa" />
+        </div>
       </div>
-      <div className="flex items-center gap-1">
+      <div className="flex items-center justify-between">
         <MatchStatusBadge status={match.status} />
         {linkable && <ChevronRight className="h-4 w-4 text-muted-foreground" />}
       </div>
@@ -59,19 +69,5 @@ function MatchRow({ match, linkable }: { match: MatchView; linkable: boolean }) 
     <Link href={`/matches/${match.id}`} className="block transition-colors hover:bg-muted/50">
       {body}
     </Link>
-  );
-}
-
-function PlayerLine({ names, team }: { names: string[]; team: "europe" | "usa" }) {
-  return (
-    <div className="flex items-center gap-2">
-      <span
-        className={cn(
-          "inline-block h-2 w-2 shrink-0 rounded-full",
-          team === "europe" ? "bg-europe" : "bg-usa",
-        )}
-      />
-      <span className="truncate">{names.join(" & ") || "TBD"}</span>
-    </div>
   );
 }
