@@ -330,12 +330,22 @@ function MatchRow({
 
 function AddMatchForm({ session, players }: { session: SessionView; players: PlayerLite[] }) {
   const needed = session.format === "singles" ? 1 : 2;
+
+  const usedInSession = new Set(
+    session.matches.flatMap((m) => [
+      ...m.europePlayers.map((p) => p.id),
+      ...m.usaPlayers.map((p) => p.id),
+    ]),
+  );
+
   const europeRoster = players.filter((p) => p.team === "europe");
   const usaRoster = players.filter((p) => p.team === "usa");
 
   const [eu, setEu] = useState<string[]>(Array(needed).fill(""));
   const [usa, setUsa] = useState<string[]>(Array(needed).fill(""));
   const { pending, run } = useAction();
+
+  if (session.matches.length >= 4) return null;
 
   function setSlot(side: "eu" | "usa", index: number, value: string) {
     const setter = side === "eu" ? setEu : setUsa;
@@ -380,7 +390,7 @@ function AddMatchForm({ session, players }: { session: SessionView; players: Pla
               key={i}
               roster={europeRoster}
               value={value}
-              exclude={eu.filter((_, j) => j !== i)}
+              exclude={[...eu.filter((_, j) => j !== i), ...usedInSession]}
               onChange={(v) => setSlot("eu", i, v)}
             />
           ))}
@@ -392,7 +402,7 @@ function AddMatchForm({ session, players }: { session: SessionView; players: Pla
               key={i}
               roster={usaRoster}
               value={value}
-              exclude={usa.filter((_, j) => j !== i)}
+              exclude={[...usa.filter((_, j) => j !== i), ...usedInSession]}
               onChange={(v) => setSlot("usa", i, v)}
             />
           ))}
@@ -489,10 +499,13 @@ function PlayerSelect({
   exclude: string[];
   onChange: (v: string) => void;
 }) {
+  const selected = roster.find((p) => p.id === value);
   return (
     <Select value={value} onValueChange={(v) => onChange(v ?? "")}>
       <SelectTrigger className="h-8 text-xs">
-        <SelectValue placeholder="Pick…" />
+        <SelectValue placeholder="Pick…">
+          {selected ? `${selected.name} (${selected.handicap})` : undefined}
+        </SelectValue>
       </SelectTrigger>
       <SelectContent>
         {roster
