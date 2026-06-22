@@ -237,15 +237,23 @@ function HoleRow({
   const isShamble = format === "shamble";
   const isSinglesOrScramble = format === "singles" || format === "scramble";
 
-  // Start collapsed if already has a winner (e.g. loading in-progress match)
-  const [expanded, setExpanded] = useState(winner === null);
-  const prevWinner = useRef(winner);
+  // How many scores we expect before the hole can auto-roll-up.
+  const expectedEu = isShamble ? europePlayers.length : 1;
+  const expectedUsa = isShamble ? usaPlayers.length : 1;
+  const allScoresEntered =
+    euScores.filter((s) => s != null).length >= expectedEu &&
+    usaScores.filter((s) => s != null).length >= expectedUsa;
+
+  // Start collapsed if already complete (e.g. loading an in-progress match).
+  const [expanded, setExpanded] = useState(!(winner !== null && allScoresEntered));
+  // Auto-collapse only once every expected score is in.
+  const prevAllEntered = useRef(allScoresEntered);
   useEffect(() => {
-    if (prevWinner.current === null && winner !== null) {
+    if (!prevAllEntered.current && allScoresEntered && winner !== null) {
       setExpanded(false);
     }
-    prevWinner.current = winner;
-  }, [winner]);
+    prevAllEntered.current = allScoresEntered;
+  }, [allScoresEntered, winner]);
 
   const summaryText = holeSummaryText(hole, format, winner, euScores, usaScores);
   const showInputs = winner === null || expanded;
